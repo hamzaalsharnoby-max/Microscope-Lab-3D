@@ -1,1 +1,474 @@
 
+<!DOCTYPE html>
+<html lan
+  g="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Microscope Lab 3D</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#071321;color:white;font-family:Arial}
+header{text-align:center;padding:16px;background:#102d48}
+h1{color:#ffd66e;margin:5px}
+main{max-width:1000px;margin:auto;padding:12px}
+.panel{background:#11283d;padding:15px;border-radius:15px;margin:12px 0}
+h3{color:#6cdbff}
+#scene{
+ height:390px;background:radial-gradient(#24455c,#030a12);
+ border-radius:14px;overflow:hidden;position:relative;
+ touch-action:none
+}
+#scene canvas{display:block;width:100%;height:100%}
+.note{font-size:12px;color:#b4d9ed;text-align:center}
+button,select{
+ border:0;border-radius:9px;padding:11px;
+ background:#176b8c;color:white;font-size:14px;
+}
+button:active{background:#c38e25}
+.parts{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.parts button{font-size:12px}
+.parts button.active{background:#c28e27;color:#111}
+label{display:block;margin:12px 0 5px;color:#aeeaff}
+input{width:100%;accent-color:#35caff}
+#view{
+ width:240px;height:240px;border-radius:50%;
+ background:#06141c;border:5px solid #8296a5;
+ margin:12px auto;display:block
+}
+.info{background:#071b2b;padding:12px;border-radius:10px}
+</style>
+</head>
+<body>
+
+<header>
+<h1>🔬 MICROSCOPE LAB 3D</h1>
+<p>المعمل العلمي التفاعلي</p>
+</header>
+
+<main>
+
+<section class="panel">
+<h3>🔬 الميكروسكوب ثلاثي الأبعاد</h3>
+<div id="scene"></div>
+<p class="note">
+اسحب الشاشة لتدوير الميكروسكوب، واستخدم إصبعين للتقريب والإبعاد.
+اضغط على أي جزء لاختياره.
+</p>
+</section>
+
+<section class="panel">
+<h3>🎛️ اختر الجزء الذي تريد التحكم فيه</h3>
+<div class="parts" id="parts">
+<button data-part="tube">Tube</button>
+<button data-part="eyepiece">Eyepiece</button>
+<button data-part="arm">Arm</button>
+<button data-part="nose">Nosepiece</button>
+<button data-part="lens">Objective Lenses</button>
+<button data-part="stage">Stage</button>
+<button data-part="clips">Clips</button>
+<button data-part="knob">Adjustment Knob</button>
+<button data-part="mirror">Reflector</button>
+<button data-part="base">Base</button>
+</div>
+
+<div class="info">
+<h3 id="selected">اختر جزءاً من الميكروسكوب</h3>
+<p id="description">اضغط على اسم الجزء أو عليه في المجسم.</p>
+
+<label id="controlLabel">حركة الجزء</label>
+<input id="movement" type="range" min="-100" max="100" value="0">
+
+<p id="amount">0</p>
+<button onclick="togglePart()">تغيير الحالة / فتح وقفل</button>
+</div>
+</section>
+
+<section class="panel">
+<h3>🧪 اختر الشريحة للفحص</h3>
+<select id="sample" onchange="drawSample()">
+<option value="pollen">Pollen Grains - حبوب اللقاح</option>
+<option value="onion">Onion Cells - خلايا البصل</option>
+<option value="blood">Blood Cells - خلايا الدم</option>
+<option value="leaf">Leaf Cells - خلايا النبات</option>
+<option value="water">Pond Water - ماء البركة</option>
+</select>
+
+<h3 style="text-align:center">👁️ نافذة الرؤية</h3>
+<canvas id="view" width="480" height="480"></canvas>
+<p class="note">الصورة التعليمية داخل العدسة</p>
+</section>
+
+<section class="panel">
+<h3>⚙️ التحكم البصري</h3>
+
+<label>Objective Magnification</label>
+<select id="objective" onchange="updateOptics()">
+<option value="4">4x</option>
+<option value="10" selected>10x</option>
+<option value="40">40x</option>
+</select>
+
+<label>Eyepiece Magnification</label>
+<select id="eyepiecePower" onchange="updateOptics()">
+<option value="10">10x</option>
+<option value="15">15x</option>
+<option value="20">20x</option>
+</select>
+
+<h3 id="power">Total Magnification: 100x</h3>
+
+<label>Focus - وضوح الصورة</label>
+<input type="range" id="focus" min="0" max="100" value="80" oninput="drawSample()">
+
+<label>Light - قوة الإضاءة</label>
+<input type="range" id="brightness" min="0" max="100" value="70" oninput="drawSample()">
+
+<button onclick="resetAll()">↩️ إعادة ضبط الكل</button>
+</section>
+
+</main>
+
+<script type="importmap">
+{
+ "imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+ }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x10283b);
+
+const camera=new THREE.PerspectiveCamera(45,1,0.1,100);
+camera.position.set(7,6,9);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(600,390);
+renderer.shadowMap.enabled=true;
+document.getElementById('scene').appendChild(renderer.domElement);
+
+const orbit=new OrbitControls(camera,renderer.domElement);
+orbit.enableDamping=true;
+orbit.target.set(0,2,0);
+orbit.minDistance=5;
+orbit.maxDistance=16;
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x26364b,2));
+const light=new THREE.DirectionalLight(0xffffff,2);
+light.position.set(5,10,8);
+scene.add(light);
+
+const microscope=new THREE.Group();
+scene.add(microscope);
+
+const materials={
+ body:new THREE.MeshStandardMaterial({color:0xd8e0e6,roughness:.35}),
+ black:new THREE.MeshStandardMaterial({color:0x182632,metalness:.5,roughness:.3}),
+ glass:new THREE.MeshStandardMaterial({color:0x44b9e9,metalness:.7,roughness:.15}),
+ gold:new THREE.MeshStandardMaterial({color:0xc69a43,metalness:.6}),
+ rubber:new THREE.MeshStandardMaterial({color:0x101820})
+};
+
+function part(name,geometry,material,pos,parent=microscope){
+ const mesh=new THREE.Mesh(geometry,material);
+ mesh.position.set(...pos);
+ mesh.name=name;
+ mesh.castShadow=true;
+ mesh.receiveShadow=true;
+ parent.add(mesh);
+ return mesh;
+}
+
+function box(name,w,h,d,material,pos,parent){
+ return part(name,new THREE.BoxGeometry(w,h,d),material,pos,parent);
+}
+
+function cylinder(name,r1,r2,h,material,pos,parent){
+ return part(name,new THREE.CylinderGeometry(r1,r2,h,32),material,pos,parent);
+}
+
+// Base
+box('base',4.2,.4,2.8,materials.body,[0,.2,0]);
+
+// Arm
+const arm=new THREE.Group();
+arm.position.set(-1.3,.4,0);
+microscope.add(arm);
+
+const armMesh=part('arm',
+ new THREE.TorusGeometry(1.25,.22,16,64,Math.PI*1.3),
+ materials.body,[.4,1.8,0],arm);
+armMesh.rotation.z=Math.PI/2;
+
+// Back support
+box('arm',.4,2.6,.5,materials.body,[-1.25,1.8,0]);
+
+// Tube group
+const tube=new THREE.Group();
+tube.position.set(.5,4,0);
+microscope.add(tube);
+
+cylinder('tube',.42,.35,2.3,materials.body,[0,.8,0],tube);
+cylinder('eyepiece',.39,.39,.35,materials.black,[0,2.05,0],tube);
+cylinder('eyepiece',.26,.26,.12,materials.glass,[0,2.25,0],tube);
+
+// Nosepiece
+const nose=new THREE.Group();
+nose.position.set(0,-.45,0);
+tube.add(nose);
+
+cylinder('nose',.65,.65,.22,materials.black,[0,0,0],nose);
+
+// Objective lenses
+const lenses=[];
+[0,1,2].forEach((i)=>{
+ const holder=new THREE.Group();
+ holder.rotation.y=i*2.1;
+ nose.add(holder);
+ cylinder('lens',.15,.18,.65,materials.glass,[.4,-.42,0],holder);
+ cylinder('lens',.19,.19,.15,materials.black,[.4,-.08,0],holder);
+ lenses.push(holder);
+});
+
+// Stage
+const stage=box('stage',2.5,.18,2,materials.black,[0,1.25,0]);
+const stageGroup=new THREE.Group();
+stageGroup.position.set(0,1.25,0);
+microscope.add(stageGroup);
+microscope.remove(stage);
+stageGroup.add(stage);
+stage.position.set(0,0,0);
+
+// Clips
+const clips=[];
+[-.7,.7].forEach(x=>{
+ clips.push(box('clips',.25,.12,.8,materials.gold,[x,.13,0],stageGroup));
+});
+
+// Adjustment knobs
+const knob= new THREE.Group();
+knob.position.set(-1.65,1.65,.4);
+microscope.add(knob);
+cylinder('knob',.42,.42,.28,materials.black,[0,0,0],knob);
+cylinder('knob',.22,.22,.32,materials.gold,[0,0,0],knob);
+
+// Reflector
+const mirrorGroup=new THREE.Group();
+mirrorGroup.position.set(0,.75,.1);
+microscope.add(mirrorGroup);
+const mirror=part('mirror',new THREE.CylinderGeometry(.52,.52,.14,32),materials.glass,[0,0,0],mirrorGroup);
+mirror.rotation.x=Math.PI/2;
+
+// Lighting beneath stage
+const lamp=new THREE.PointLight(0xffffff,2,5);
+lamp.position.set(0,1,0);
+microscope.add(lamp);
+
+// Floor
+const floor=new THREE.GridHelper(20,20,0x41627a,0x243c4e);
+floor.position.y=-.02;
+scene.add(floor);
+
+// Part data
+const data={
+ tube:['Tube','الأنبوبة التي تحمل العدسة العينية وتصلها بالعدسات الشيئية.'],
+ eyepiece:['Eyepiece Lens','العدسة التي تنظر من خلالها.'],
+ arm:['Arm','الذراع الذي يحمل أجزاء الميكروسكوب.'],
+ nose:['Revolving Nosepiece','القرص الذي يحمل العدسات الشيئية ويدور لتبديلها.'],
+ lens:['Objective Lenses','العدسات الشيئية المسؤولة عن تكبير العينة.'],
+ stage:['Stage','المنصة التي توضع عليها الشريحة.'],
+ clips:['Clips','مشابك تثبيت الشريحة.'],
+ knob:['Adjustment Knob','قرص ضبط وضوح الصورة.'],
+ mirror:['Reflector','المرآة التي توجه الضوء إلى الشريحة.'],
+ base:['Base','قاعدة الميكروسكوب.']
+};
+
+let selected='tube';
+let states={clips:false};
+
+function selectPart(name){
+ if(!data[name])return;
+ selected=name;
+ document.getElementById('selected').textContent=data[name][0];
+ document.getElementById('description').textContent=data[name][1];
+ document.querySelectorAll('[data-part]').forEach(b=>{
+ b.classList.toggle('active',b.dataset.part===name);
+ });
+ document.getElementById('movement').value=0;
+ document.getElementById('amount').textContent='0';
+}
+document.querySelectorAll('[data-part]').forEach(b=>{
+ b.onclick=()=>selectPart(b.dataset.part);
+});
+
+const raycaster=new THREE.Raycaster();
+const pointer=new THREE.Vector2();
+renderer.domElement.addEventListener('click',e=>{
+ const rect=renderer.domElement.getBoundingClientRect();
+ pointer.x=((e.clientX-rect.left)/rect.width)*2-1;
+ pointer.y=-((e.clientY-rect.top)/rect.height)*2+1;
+ raycaster.setFromCamera(pointer,camera);
+ const hits=raycaster.intersectObjects(microscope.children,true);
+ if(hits.length){
+ let obj=hits[0].object;
+ while(obj&& !data[obj.name])obj=obj.parent;
+ if(obj)selectPart(obj.name);
+ }
+});
+
+const movement=document.getElementById('movement');
+movement.oninput=()=>{
+ const v=Number(movement.value);
+ document.getElementById('amount').textContent=v;
+
+ if(selected==='tube')tube.position.y=4+v/100;
+ if(selected==='eyepiece')tube.rotation.x=v/150;
+ if(selected==='arm')arm.rotation.z=v/150;
+ if(selected==='nose')nose.rotation.y=v/30;
+ if(selected==='lens'){
+  lenses.forEach((l,i)=>l.rotation.y=v/100+i*.02);
+ }
+ if(selected==='stage'){
+  stageGroup.position.x=v/60;
+ }
+ if(selected==='knob'){
+  knob.rotation.x=v/20;
+  stageGroup.position.y=1.25+v/180;
+ }
+ if(selected==='mirror')mirrorGroup.rotation.x=v/100;
+ if(selected==='base')microscope.rotation.y=v/100;
+ if(selected==='clips'){
+  clips.forEach(c=>c.position.x=(c.position.x>0?1:-1)*(0.7+v/200));
+ }
+};
+
+window.togglePart=()=>{
+ if(selected==='clips'){
+  states.clips=!states.clips;
+  clips.forEach(c=>c.visible=!states.clips);
+ }
+ if(selected==='nose')nose.rotation.y+=Math.PI/3;
+ if(selected==='mirror')mirrorGroup.rotation.x+=.3;
+ if(selected==='knob'){
+  stageGroup.position.y+=.15;
+ }
+};
+
+window.updateOptics=()=>{
+ const a=Number(document.getElementById('objective').value);
+ const b=Number(document.getElementById('eyepiecePower').value);
+ document.getElementById('power').textContent=
+ 'Total Magnification: '+a*b+'x';
+ drawSample();
+};
+
+const canvas=document.getElementById('view');
+const ctx=canvas.getContext('2d');
+
+window.drawSample=()=>{
+ const type=document.getElementById('sample').value;
+ const focus=Number(document.getElementById('focus').value);
+ const brightness=Number(document.getElementById('brightness').value);
+ const zoom=Number(document.getElementById('objective').value);
+
+ ctx.clearRect(0,0,480,480);
+ ctx.save();
+ ctx.beginPath();
+ ctx.arc(240,240,230,0,Math.PI*2);
+ ctx.clip();
+ ctx.fillStyle=`rgb(${5+brightness/10},${18+brightness/5},${28+brightness/4})`;
+ ctx.fillRect(0,0,480,480);
+ ctx.globalAlpha=.2+brightness/125;
+ ctx.translate(240,240);
+ ctx.scale(zoom/10,zoom/10);
+ ctx.filter=`blur(${(100-focus)/18}px)`;
+
+ if(type==='pollen'){
+ for(let i=0;i<25;i++){
+ let a=i*2.4,r=75+(i%4)*25;
+ let x=Math.cos(a)*r,y=Math.sin(a)*r;
+ ctx.beginPath();ctx.arc(x,y,20,0,7);
+ ctx.fillStyle='#eac348';ctx.fill();
+ ctx.strokeStyle='#99702b';ctx.lineWidth=4;ctx.stroke();
+ }
+ }else if(type==='onion'||type==='leaf'){
+ for(let x=-220;x<220;x+=75)
+ for(let y=-220;y<220;y+=55){
+ ctx.fillStyle=type==='leaf'?'#6da96b':'#c6d9ad';
+ ctx.strokeStyle='#688f7c';ctx.lineWidth=3;
+ ctx.fillRect(x,y,70,50);ctx.strokeRect(x,y,70,50);
+ ctx.beginPath();ctx.arc(x+35,y+25,8,0,7);
+ ctx.fillStyle='#82579b';ctx.fill();
+ }
+ }else if(type==='blood'){
+ for(let i=0;i<50;i++){
+ let x=Math.sin(i*12)*210,y=Math.cos(i*15)*210;
+ ctx.beginPath();ctx.ellipse(x,y,21,15,0,0,7);
+ ctx.fillStyle='#cf4555';ctx.fill();
+ ctx.beginPath();ctx.arc(x,y,7,0,7);
+ ctx.fillStyle='#9b2940';ctx.fill();
+ }
+ }else{
+ for(let i=0;i<20;i++){
+ let x=Math.sin(i*12)*170,y=Math.cos(i*9)*170;
+ ctx.beginPath();ctx.arc(x,y,14,0,7);
+ ctx.fillStyle='#56dbb0';ctx.fill();
+ ctx.beginPath();ctx.arc(x+4,y-4,4,0,7);
+ ctx.fillStyle='white';ctx.fill();
+ }
+ }
+ ctx.restore();
+ ctx.globalAlpha=1;
+ ctx.filter='none';
+ ctx.strokeStyle='#a9c5d7';
+ ctx.lineWidth=5;
+ ctx.beginPath();ctx.arc(240,240,230,0,7);ctx.stroke();
+};
+
+window.resetAll=()=>{
+ tube.position.set(.5,4,0);
+ tube.rotation.set(0,0,0);
+ nose.rotation.set(0,0,0);
+ arm.rotation.set(0,0,0);
+ stageGroup.position.set(0,1.25,0);
+ knob.rotation.set(0,0,0);
+ mirrorGroup.rotation.set(0,0,0);
+ clips.forEach(c=>c.visible=true);
+ states.clips=false;
+ movement.value=0;
+ document.getElementById('focus').value=80;
+ document.getElementById('brightness').value=70;
+ document.getElementById('objective').value=10;
+ document.getElementById('eyepiecePower').value=10;
+ updateOptics();
+ selectPart('tube');
+};
+
+function animate(){
+ requestAnimationFrame(animate);
+ orbit.update();
+ renderer.render(scene,camera);
+}
+function resize(){
+ const w=document.getElementById('scene').clientWidth;
+ const h=document.getElementById('scene').clientHeight;
+ camera.aspect=w/h;
+ camera.updateProjectionMatrix();
+ renderer.setSize(w,h);
+}
+new ResizeObserver(resize).observe(document.getElementById('scene'));
+resize();
+animate();
+drawSample();
+selectPart('tube');
+</script>
+</body>
+</html>
+
